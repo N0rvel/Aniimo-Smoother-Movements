@@ -9,6 +9,7 @@ import struct
 import zipfile
 import zlib
 from luajit_patch import need, patch
+import pawn_patch
 
 ENTRY = 'xfs/luascripts/Entities/SpaceEntities/CommonComponent/ClientMotionComponent.lua'
 
@@ -31,7 +32,7 @@ def read_json(data):
     return json.loads(data, object_pairs_hook=unique)
 
 
-def replace_entry(archive, index, new_script):
+def replace_entry(archive, index, new_script, entry=ENTRY):
     need(len(archive) < 2**32, 'ZIP64 is unsupported.')
     meta = read_json(index)
     need(meta.get('CMSign') == 0 and meta.get('CMDataLen') == len(archive)
@@ -40,7 +41,7 @@ def replace_entry(archive, index, new_script):
         infos = z.infolist()
         need(len({i.filename for i in infos}) == len(infos), 'Duplicate archive entry.')
         need(z.testzip() is None, 'Corrupt resource archive.')
-        matches = [i for i in infos if i.filename == ENTRY]
+        matches = [i for i in infos if i.filename == entry]
         need(len(matches) == 1, 'Movement script missing or duplicated.')
         info = matches[0]
         need(info.compress_type == zipfile.ZIP_STORED and not info.flag_bits & 9,
@@ -60,7 +61,7 @@ def replace_entry(archive, index, new_script):
              and row.get('CEOffset') == h+30+nl+el
              and row.get('CESize') == item.file_size and row.get('CECSize') == item.compress_size,
              'Resource index does not match archive offsets/sizes.')
-    row = by_name[ENTRY]
+    row = by_name[entry]
     need(row['CEMD5'] == md5(old_script), 'Movement script checksum mismatch.')
     local, start = info.header_offset, row['CEOffset']
     end_data = start + len(old_script)
@@ -85,7 +86,7 @@ def replace_entry(archive, index, new_script):
         nl,el,cl = struct.unpack_from('<HHH',result,pos+28)
         name = bytes(result[pos+46:pos+46+nl])
         offset = struct.unpack_from('<I',result,pos+42)[0]
-        if name == ENTRY.encode():
+        if name == entry.encode():
             need(offset == local, 'Movement header mismatch.')
             struct.pack_into('<III',result,pos+16,crc,len(new_script),len(new_script))
             found += 1
@@ -102,7 +103,7 @@ def replace_entry(archive, index, new_script):
     meta['CMDataLen'],meta['CMDataMD5'] = len(result),md5(result)
     new_index = json.dumps(meta,separators=(',',':'),ensure_ascii=False).encode('utf-8')
     with zipfile.ZipFile(io.BytesIO(result)) as z:
-        need(z.testzip() is None and z.read(ENTRY) == new_script, 'Patched ZIP verification failed.')
+        need(z.testzip() is None and z.read(entry) == new_script, 'Patched ZIP verification failed.')
         for item in z.infolist():
             h = item.header_offset
             nl,el = struct.unpack_from('<HH',result,h+26)
@@ -110,7 +111,7 @@ def replace_entry(archive, index, new_script):
     return bytes(result),new_index
 
 
-def transform(archive,index):
+def transform_motion(archive,index):
     meta = read_json(index)
     need(meta.get('CMVersion') == 3551601, 'This release supports resource build 3551601 only.')
     with zipfile.ZipFile(io.BytesIO(archive)) as z:
@@ -126,3 +127,21 @@ def transform(archive,index):
         return archive,index,detail
     new_archive,new_index = replace_entry(archive,index,new)
     return new_archive,new_index,detail
+
+
+def transform(archive,index):
+    # Preflight both scripts before constructing any replacement resource.
+    with zipfile.ZipFile(io.BytesIO(archive)) as z:
+        old_pawn=z.read(pawn_patch.ENTRY)
+        need(len(old_pawn)<16*1024*1024, 'Oversized pawn script.')
+        new_pawn,pawn_detail=pawn_patch.patch(old_pawn)
+    result,new_index,motion_detail=transform_motion(archive,index)
+    if old_pawn!=new_pawn:
+        result,new_index=replace_entry(result,new_index,new_pawn,pawn_patch.ENTRY)
+    detail=dict(motion_detail)
+    detail['state']='equal' if motion_detail['state']=='equal' and pawn_detail['state']=='equal' else 'original'
+    detail['hook']='control lifecycle + permitted movement input'
+    detail['pawn_entry']=pawn_patch.ENTRY
+    detail['pawn_before']=sha(old_pawn)
+    detail['pawn_after']=sha(new_pawn)
+    return result,new_index,detail

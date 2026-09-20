@@ -9,6 +9,7 @@ from platform_windows import discover_games
 
 TEXT = {
  "en": {
+    "upgrade_required": "Previous movement version detected. Click Remove movement fix, then Install fix. Your previously installed camera fix is preserved.",
     "intro": "Remove the brief slowdown when changing movement direction.",
     "folder": "Aniimo game folder", "browse": "Browse...", "check": "Check compatibility",
     "install": "Install fix", "restore": "Remove movement fix",
@@ -29,6 +30,7 @@ TEXT = {
     "build": "Resource build(s): ", "missing": "No game folder selected.",
  },
  "fr": {
+    "upgrade_required": "Ancienne version détectée. Clique sur Retirer ce correctif, puis Installer le correctif. Le mod caméra installé auparavant est conservé.",
     "intro": "Supprime le freinage lors des changements de direction.",
     "folder": "Dossier du jeu Aniimo", "browse": "Parcourir…", "check": "Vérifier la compatibilité",
     "install": "Installer le correctif", "restore": "Retirer ce correctif",

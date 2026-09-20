@@ -12,7 +12,7 @@ from archive_patch import transform, read_json, sha
 from luajit_patch import need
 from platform_windows import ensure_closed, mutation_lock
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 STATE = ".aniimo-turn-fix"
 BASES = tuple(Path(data) / sub / "cvs/res/lua"
               for data in ("Aniimo_Data", "worldx_Data")
@@ -137,6 +137,8 @@ def check(root):
     state = "compatible" if changes else "already_equal"
     if doc and doc["status"] in ("prepared", "installed"):
         state = "installed" if all(h == r["after"] for h, r in zip(hashes, doc["files"])) else "game_updated_or_modified"
+        if state == "installed" and doc.get("tool_version") != VERSION and changes:
+            state = "upgrade_required"
     return {"version": VERSION, "state": state, "files_to_change": len(changes), "resources": details}
 
 
@@ -147,6 +149,8 @@ def install(root):
         old_doc = load_journal(root)
         if old_doc and old_doc["status"] == "prepared":
             raise RuntimeError("Interrupted installation: Restore first, then install again.")
+        if old_doc and old_doc["status"] == "installed" and old_doc.get("tool_version") != VERSION:
+            need(False, "Previous movement version installed. Use Remove movement fix first, then Install fix. The camera fix is preserved.")
         root, changes, details, recognized = plan(root)
         if not changes:
             return {"state": "already_equal", "resources": details}

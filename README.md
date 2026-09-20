@@ -1,38 +1,51 @@
-# Aniimo Smooth Movement — 1.0.0
+# Aniimo Smooth Movement — 1.0.1
 
-Removes turn-related slowdown using Aniimo's own steering-deceleration command.
-The original tester confirmed the fix works in game on resource build 3551601.
-Maximum-speed and acceleration settings are unchanged. Other movement modes
-have not all been tested.
+Removes turn-related slowdown using Aniimo's own steering-deceleration command,
+without changing maximum-speed, acceleration settings or input axis values.
 
-## Install
+## Fix in 1.0.1
 
-Close Aniimo and its repair tool. Extract the entire ZIP, open **Aniimo Smooth
-Movement.py** using **Python 3.10+ with Tkinter**, select the folder containing
-Aniimo.exe, check compatibility and install. Close the manager and restart Aniimo.
-Python is required and is not bundled; no extra Python packages are needed.
+Version 1.0 only applied the setting on control gain. If the native movement state
+was reset during a transition, its Lua marker could remain set while steering
+deceleration returned. Version 1.0.1 reasserts the setting immediately before
+permitted nonzero movement input reaches the native controller. It uses the pawn
+that receives that input, including after switching characters/models.
 
-Install the camera fix first if using both mods. Remove mods in reverse order:
-Smooth Movement first, then Camera Axis Fix. The camera payload is kept identical.
+All original movement gates remain in place. Zero or blocked input does not
+reassert the setting. There is no timer, external background process or input
+substitution. Control-loss cleanup from 1.0 is retained.
 
-## Remove or upgrade from the beta
+The regression was reproduced in an isolated Lua test and the corrected version
+passed simulated resets, model switches, movement blocks and cleanup tests.
+Actual fusion/cinematic transitions still need confirmation in game.
 
-Close the game and choose **Remove movement fix**. Verified backups restore the
-exact previous resources. Keep `.aniimo-turn-fix` until removal is complete.
-Restoration refuses unknown changes from game updates or later-installed mods.
+## Install or upgrade
 
-The gameplay patch is identical to Aniimo Turn Fix 0.1.0-beta. Existing beta users
-do not need to reinstall. The 1.0.0 manager recognizes its patch and backups.
+Requirements: Windows, Aniimo resource build **3551601**, and **Python 3.10+ with
+Tkinter**. Python is not included. No extra Python packages are required.
 
-## Implementation and validation
+1. Close Aniimo and its repair tool; extract the entire ZIP.
+2. Open **Aniimo Smooth Movement.py** with Python and select the game folder.
+3. If 1.0.0 or the beta is installed, click **Remove movement fix** first.
+4. Click **Check compatibility**, then **Install fix**.
+5. Close the manager and restart Aniimo.
 
-Only the ClientMotionComponent entry in recognized LuaScripts.xdf/.xdt resource
-pairs is patched. Control-gain/loss handlers invoke SetSteeringDeceleration with
-the existing Logic reason; a local marker tracks application to an entity.
-Original callbacks remain intact. All other entry payloads are preserved.
-ZIP CRCs, sizes, offsets and resource-index checksums are updated.
+The 1.0.1 manager recognizes the old backup journal. Removing the previous patch
+before upgrading ensures future removal restores the original resources, not the
+old buggy patch. Unknown external modifications are refused.
 
-Only resource build 3551601 and the audited movement-script SHA-256 are accepted.
-No proprietary game payload is shipped. No DLL injection, executable modification,
-network requests or background app are involved. See VALIDATION.json for tests,
-SECURITY-REVIEW.md for reviewer notes, and NEXUS-DESCRIPTION.md for the mod page text.
+## Camera compatibility and removal
+
+Install Camera Axis Fix first, then Smooth Movement. Remove in reverse order.
+The camera script is kept identical. Close the game and click **Remove movement
+fix** to restore the exact pre-installation resources, including an earlier camera
+fix. Keep `.aniimo-turn-fix` until removal is complete. Later updates/mods may cause
+restoration to be refused to protect newer resource files.
+
+## Implementation
+
+Two Lua entries are patched: ClientMotionComponent (control lifecycle) and
+PawnController (permitted movement input). All other entry payloads remain
+unchanged. ZIP CRCs, lengths, offsets and index checksums are updated. Only the
+audited scripts and resource build are accepted. No game payload is distributed.
+See VALIDATION.json for evidence and limitations.
